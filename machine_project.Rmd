@@ -1,0 +1,178 @@
+---
+title: "Exercise Mode Prediction"
+author: "localperf"
+date: "Thursday, October 23, 2014"
+output: html_document
+---
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. 
+
+These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. 
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+Subjects were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+
+In this project, our goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants to predict an exercise mode : either a correct exercise, or a wrong exercise execution in one of 4 ways.  The 5 modes are coded in the data as A,B,C.D, and E. 
+ 
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+#Data 
+
+
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+#Variable Selection
+
+The training data have 19,622 rows and 160 columns.  An examination of the first rows shows that the first column is a row sequence number, and the next six columns are user_name, three timestamp  values, and two "window" variables.  Since those seven fields are not physiologic, they were deleted.  
+
+Further investidation showed that 100 columns were mostly "missing": each had more than 19,000 (more than 95%) missing values.  Those columns were dropped, and the remaining data were saved as train2.
+
+```{r}
+
+library (caret)
+library (dplyr)
+library (ggplot2)
+library (randomForest)
+
+get.data = function () {
+   #--read data and discard non-physiologic variables
+   #--19622 rows, 160 columns
+  
+   train = read.csv ("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+   train = tbl_df(train)
+   colnames(train)[1] = "seq"
+   train
+   dim(train)
+   summary(train)
+
+   z = grep ("timestamp", colnames(train))
+   colnames(train)[z]
+   train = train[,-z]
+
+   z = grep("user_name", colnames(train))
+   train = train[,-z]
+
+   train$seq         = NULL
+   train$new_window  = NULL
+   train$num_window  = NULL
+
+   dim(train)
+   head(colnames(train))
+   train
+}
+
+drop.na.columns = function (df) {
+   #--drop columns if they have any NAs
+   counts = data.frame(var = colnames(df))
+   for (var in colnames(df)) {
+      counts$na[counts$var == var] = sum (is.na(df[,var]))
+   }
+   na.counts = colSums(is.na(df)) == 0
+   df2 = df[, na.counts ]
+   df2
+}
+
+train = get.data()
+
+#explore (train) #--summarize columns by NA count
+
+train2 = drop.na.columns(train)
+dim(train2)
+```
+
+At this point, train2 has 52 predictors, and one one outcome ("classe").
+
+#Random Forest
+
+I decided to use the randomForset procedure in the R randomForest package to build a classification prediction model.
+
+```{r}
+
+set.seed (1188)
+ntree = 50
+fit.rf = randomForest (classe ~ ., data = train2, importance = T, ntree = ntree)
+predicted = predict (fit.rf, train, type = "class")
+
+mc = table (train2$classe, predicted)
+mc
+
+```
+
+The accuracy of the classifier is 100% - an unexpected,but welcome, outcome.  The ntree parameter in the call to randomForest specifies a number of trees to be built, and deafults to 500. I reduced the value until the accuracy was less than 100%, which occurred near 15 trees.  The plot below shows that mis-classification rates fall off very rapidly with ibncreasing tree counts.
+
+```{r}
+plot (fit.rf, main = "Random Forest Error vs Number of Trees")
+```
+
+#Variable Importance
+
+The Gini importance of each variable in contributing to model accuracy is saved in the fit object returned by randomForest.  The 5 most important and 5 least important variables are shown below:
+```{r}
+
+
+imp.rf = as.data.frame(randomForest::importance(fit.rf, type = 2))
+imp.rf$var = row.names(imp.rf)
+imp.rf = imp.rf[order(-imp.rf$MeanDecreaseGini),]
+row.names(imp.rf) = NULL
+head (imp.rf)
+tail (imp.rf)
+```
+
+#Cross-validation
+
+I decided to implement 10-fold cross validation.  
+
+To do this, I divided the training data into 10 nearly-equally-sized folds, with a random assigment of rows to folds.  For each fold, I created a test and training set coposed of all the training data but the fold, and the fold, respectively.  I used the same call to randomForest 10 times, once with each of the new training subsets; and then scored that model on the held out test data.  
+
+```{r}
+
+k.fold.rf.cross = function (df, ntree, K = 10) {
+   #--build K models, holding out 1/K of the data each time
+   #--and then scoring against the held out data
+   n  = dim (df)[1]
+   u  = runif (n)
+   df = df[order(u),]
+   length(unique(u))   #--shuffle the rows
+
+   row = 1:dim(df)[1]
+   folds = row %% K
+   head (folds, 20)
+   accuracy = NULL
+   table (folds)
+   for (fold in unique(folds)) {
+      local = df[-which(folds == fold),]
+      test  = df[ which(folds == fold),]
+      local.fit = randomForest (classe ~ ., data = local, ntree=ntree, type = "class")
+      predicted = predict (local.fit, test, type = "class")
+      mc = table (test$classe, predicted)
+      accuracy = c(accuracy, sum(diag(mc)) / sum (mc))
+   }
+   accuracy
+}
+
+set.seed (271828)
+
+accuracy = k.fold.rf.cross (train2, ntree=ntree, K = 10)
+summary(accuracy)
+
+```
+
+As shown above, the accuracy remains very high - above 99% for all 10 folds.
+
+
+
+
+#Expectation for Out of Sample Error
+
+The cross validation results suggest the out of sample error should be quite small, on the order of 1% or less. 
