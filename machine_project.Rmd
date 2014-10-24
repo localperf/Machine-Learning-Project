@@ -95,7 +95,7 @@ At this point, train2 has 52 predictors, and one one outcome ("classe").
 
 #Random Forest
 
-I decided to use the randomForset procedure in the R randomForest package to build a classification prediction model.
+I decided to use the randomForest procedure in the R randomForest package to build a classification prediction model.
 
 ```{r}
 
@@ -133,7 +133,7 @@ tail (imp.rf)
 
 I decided to implement 10-fold cross validation.  
 
-To do this, I divided the training data into 10 nearly-equally-sized folds, with a random assigment of rows to folds.  For each fold, I created a test and training set coposed of all the training data but the fold, and the fold, respectively.  I used the same call to randomForest 10 times, once with each of the new training subsets; and then scored that model on the held out test data.  
+To do this, I divided the training data into 10 nearly-equally-sized folds, with a random assignment of rows to folds.  For each fold, I created training and test subsets composed of all the training data but the fold, and the fold, respectively.  I then used the same call to randomForest as used to build the model above, 10 times, once with each of the new training subsets.  I then scored that model on the held out test data.  The routine below returns a vector of the ten computed accuracies.
 
 ```{r}
 

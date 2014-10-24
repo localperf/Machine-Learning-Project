@@ -291,7 +291,7 @@ dim(train2)
 
 <p>#Random Forest</p>
 
-<p>I decided to use the randomForset procedure in the R randomForest package to build a classification prediction model.</p>
+<p>I decided to use the randomForest procedure in the R randomForest package to build a classification prediction model.</p>
 
 <pre><code class="r">set.seed (1188)
 ntree = 50
@@ -354,7 +354,7 @@ head (imp.rf)
 
 <p>I decided to implement 10-fold cross validation.  </p>
 
-<p>To do this, I divided the training data into 10 nearly-equally-sized folds, with a random assigment of rows to folds.  For each fold, I created a test and training set coposed of all the training data but the fold, and the fold, respectively.  I used the same call to randomForest 10 times, once with each of the new training subsets; and then scored that model on the held out test data.  </p>
+<p>To do this, I divided the training data into 10 nearly-equally-sized folds, with a random assignment of rows to folds.  For each fold, I created training and test subsets composed of all the training data but the fold, and the fold, respectively.  I then used the same call to randomForest as used to build the model above, 10 times, once with each of the new training subsets.  I then scored that model on the held out test data.  The routine below returns a vector of the ten computed accuracies.</p>
 
 <pre><code class="r">k.fold.rf.cross = function (df, ntree, K = 10) {
    #--build K models, holding out 1/K of the data each time
